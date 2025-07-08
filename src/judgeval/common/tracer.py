@@ -1116,6 +1116,8 @@ class BackgroundSpanService:
             span_state: State of the span ("input", "output", "completed")
         """
         if not self._shutdown_event.is_set():
+            # Increment update_id when queueing the span
+            span.increment_update_id()
             span_data = {
                 "type": "span",
                 "data": {
