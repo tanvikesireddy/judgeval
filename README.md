@@ -22,7 +22,7 @@ We're hiring! Join us in our mission to enable self-learning agents by providing
 
 </div>
 
-Judgeval offers **open-source tooling** for tracing, evaluating, and monitoring LLM agents. **Provides comprehensive data from agent-environment interactions** for continuous learning and self-improvement—**enabling the future of autonomous agents**.
+Judgeval offers **open-source tooling** for tracing and evaluating autonomous, stateful agents. It **provides runtime data from agent-environment interactions** for continuous learning and self-improvement.
 
 ## 🎬 See Judgeval in Action
 
