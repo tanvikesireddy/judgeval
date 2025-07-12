@@ -14,12 +14,11 @@ from judgeval.data.datasets import EvalDataset, EvalDatasetClient
 from judgeval.data import (
     ScoringResult,
     Example,
-    CustomExample,
     Trace,
 )
 from judgeval.scorers import (
-    APIJudgmentScorer,
-    JudgevalScorer,
+    APIScorerConfig,
+    BaseScorer,
     ClassifierScorer,
 )
 from judgeval.evaluation_run import EvaluationRun
@@ -41,6 +40,7 @@ from judgeval.common.tracer import Tracer
 from judgeval.common.utils import validate_api_key
 from pydantic import BaseModel
 from judgeval.run_evaluation import SpinnerWrappedTask
+from judgeval.common.logger import judgeval_logger
 
 
 class EvalRunRequestBody(BaseModel):
@@ -68,37 +68,35 @@ class SingletonMeta(type):
 class JudgmentClient(metaclass=SingletonMeta):
     def __init__(
         self,
-        judgment_api_key: Optional[str] = os.getenv("JUDGMENT_API_KEY"),
+        api_key: Optional[str] = os.getenv("JUDGMENT_API_KEY"),
         organization_id: Optional[str] = os.getenv("JUDGMENT_ORG_ID"),
     ):
-        # Check if API key is None
-        if judgment_api_key is None:
+        if not api_key:
             raise ValueError(
-                "JUDGMENT_API_KEY cannot be None. Please provide a valid API key or set the JUDGMENT_API_KEY environment variable."
+                "api_key parameter must be provided. Please provide a valid API key value or set the JUDGMENT_API_KEY environment variable."
             )
 
-        # Check if organization ID is None
-        if organization_id is None:
+        if not organization_id:
             raise ValueError(
-                "JUDGMENT_ORG_ID cannot be None. Please provide a valid organization ID or set the JUDGMENT_ORG_ID environment variable."
+                "organization_id parameter must be provided. Please provide a valid organization ID value or set the JUDGMENT_ORG_ID environment variable."
             )
 
-        self.judgment_api_key = judgment_api_key
+        self.judgment_api_key = api_key
         self.organization_id = organization_id
-        self.eval_dataset_client = EvalDatasetClient(judgment_api_key, organization_id)
+        self.eval_dataset_client = EvalDatasetClient(api_key, organization_id)
 
         # Verify API key is valid
-        result, response = validate_api_key(judgment_api_key)
+        result, response = validate_api_key(api_key)
         if not result:
             # May be bad to output their invalid API key...
             raise JudgmentAPIError(f"Issue with passed in Judgment API key: {response}")
         else:
-            print("Successfully initialized JudgmentClient!")
+            judgeval_logger.info("Successfully initialized JudgmentClient!")
 
     def a_run_evaluation(
         self,
         examples: List[Example],
-        scorers: List[Union[APIJudgmentScorer, JudgevalScorer]],
+        scorers: List[Union[APIScorerConfig, BaseScorer]],
         model: Optional[str] = "gpt-4.1",
         project_name: str = "default_project",
         eval_run_name: str = "default_eval_run",
@@ -120,7 +118,7 @@ class JudgmentClient(metaclass=SingletonMeta):
 
     def run_trace_evaluation(
         self,
-        scorers: List[Union[APIJudgmentScorer, JudgevalScorer]],
+        scorers: List[Union[APIScorerConfig, BaseScorer]],
         examples: Optional[List[Example]] = None,
         function: Optional[Callable] = None,
         tracer: Optional[Union[Tracer, BaseCallbackHandler]] = None,
@@ -163,8 +161,8 @@ class JudgmentClient(metaclass=SingletonMeta):
 
     def run_evaluation(
         self,
-        examples: Union[List[Example], List[CustomExample]],
-        scorers: List[Union[APIJudgmentScorer, JudgevalScorer]],
+        examples: List[Example],
+        scorers: List[Union[APIScorerConfig, BaseScorer]],
         model: Optional[str] = "gpt-4.1",
         project_name: str = "default_project",
         eval_run_name: str = "default_eval_run",
@@ -176,8 +174,8 @@ class JudgmentClient(metaclass=SingletonMeta):
         Executes an evaluation of `Example`s using one or more `Scorer`s
 
         Args:
-            examples (Union[List[Example], List[CustomExample]]): The examples to evaluate
-            scorers (List[Union[APIJudgmentScorer, JudgevalScorer]]): A list of scorers to use for evaluation
+            examples (List[Example]): The examples to evaluate
+            scorers (List[Union[APIScorerConfig, BaseScorer]]): A list of scorers to use for evaluation
             model (str): The model used as a judge when using LLM as a Judge
             project_name (str): The name of the project the evaluation results belong to
             eval_run_name (str): A name for this evaluation run
@@ -450,7 +448,7 @@ class JudgmentClient(metaclass=SingletonMeta):
     def assert_test(
         self,
         examples: List[Example],
-        scorers: List[Union[APIJudgmentScorer, JudgevalScorer]],
+        scorers: List[Union[APIScorerConfig, BaseScorer]],
         model: Optional[str] = "gpt-4.1",
         project_name: str = "default_test",
         eval_run_name: str = str(uuid4()),
@@ -463,7 +461,7 @@ class JudgmentClient(metaclass=SingletonMeta):
 
         Args:
             examples (List[Example]): The examples to evaluate.
-            scorers (List[Union[APIJudgmentScorer, JudgevalScorer]]): A list of scorers to use for evaluation
+            scorers (List[Union[APIScorerConfig, BaseScorer]]): A list of scorers to use for evaluation
             model (str): The model used as a judge when using LLM as a Judge
             project_name (str): The name of the project the evaluation results belong to
             eval_run_name (str): A name for this evaluation run
@@ -498,7 +496,7 @@ class JudgmentClient(metaclass=SingletonMeta):
 
     def assert_trace_test(
         self,
-        scorers: List[Union[APIJudgmentScorer, JudgevalScorer]],
+        scorers: List[Union[APIScorerConfig, BaseScorer]],
         examples: Optional[List[Example]] = None,
         function: Optional[Callable] = None,
         tracer: Optional[Union[Tracer, BaseCallbackHandler]] = None,
@@ -516,7 +514,7 @@ class JudgmentClient(metaclass=SingletonMeta):
 
         Args:
             examples (List[Example]): The examples to evaluate.
-            scorers (List[Union[APIJudgmentScorer, JudgevalScorer]]): A list of scorers to use for evaluation
+            scorers (List[Union[APIScorerConfig, BaseScorer]]): A list of scorers to use for evaluation
             model (str): The model used as a judge when using LLM as a Judge
             project_name (str): The name of the project the evaluation results belong to
             eval_run_name (str): A name for this evaluation run

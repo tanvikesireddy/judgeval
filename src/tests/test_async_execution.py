@@ -4,8 +4,9 @@ from unittest.mock import patch
 
 from judgeval.data import Example, ScoringResult
 from judgeval.judgment_client import JudgmentClient
-from judgeval.scorers import APIJudgmentScorer
+from judgeval.scorers import APIScorerConfig
 from judgeval.common.exceptions import JudgmentAPIError
+from judgeval.constants import APIScorerType
 
 
 @pytest.fixture
@@ -29,8 +30,10 @@ def examples():
 def scorers():
     """Return a list of API scorers."""
     return [
-        APIJudgmentScorer(
-            name="Test Scorer", score_type="answer_correctness", threshold=0.7
+        APIScorerConfig(
+            name="Test Scorer",
+            score_type=APIScorerType.ANSWER_CORRECTNESS,
+            threshold=0.7,
         )
     ]
 
@@ -41,7 +44,7 @@ def judgment_client():
     with patch(
         "judgeval.judgment_client.validate_api_key", return_value=(True, "valid")
     ):
-        client = JudgmentClient(judgment_api_key="fake_key", organization_id="fake_org")
+        client = JudgmentClient(api_key="fake_key", organization_id="fake_org")
         return client
 
 
@@ -80,7 +83,6 @@ async def test_async_execution_result_awaitable(judgment_client, examples, score
             name=None,
             trace_id=None,
             run_duration=None,
-            evaluation_cost=None,
         )
     ]
 

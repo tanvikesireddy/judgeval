@@ -2,7 +2,7 @@ from typing import Any, Dict, List, Optional, Sequence
 from uuid import UUID
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from judgeval.common.tracer import (
     TraceClient,
@@ -120,8 +120,6 @@ class JudgevalCallbackHandler(BaseCallbackHandler):
                 trace_id,
                 event_name,
                 project_name=project,
-                overwrite=False,
-                rules=self.tracer.rules,
                 enable_monitoring=self.tracer.enable_monitoring,
                 enable_evaluations=self.tracer.enable_evaluations,
             )
@@ -140,7 +138,6 @@ class JudgevalCallbackHandler(BaseCallbackHandler):
                 # NEW: Initial save for live tracking (follows the new practice)
                 try:
                     trace_id_saved, server_response = self._trace_client.save(
-                        overwrite=self._trace_client.overwrite,
                         final_save=False,  # Initial save for live tracking
                     )
                 except Exception as e:
@@ -210,6 +207,7 @@ class JudgevalCallbackHandler(BaseCallbackHandler):
             # Set both fields on the span
             new_span.inputs = clean_inputs
             new_span.additional_metadata = metadata
+            new_span.increment_update_id()  # Thread-safe increment for span modification
         else:
             new_span.inputs = {}
             new_span.additional_metadata = {}
@@ -249,10 +247,12 @@ class JudgevalCallbackHandler(BaseCallbackHandler):
             trace_span = trace_client.span_id_to_span.get(span_id)
             if trace_span:
                 trace_span.duration = duration
+                trace_span.increment_update_id()  # Thread-safe increment for span modification
 
                 # Handle outputs and error
                 if error:
                     trace_span.output = error
+                    trace_span.increment_update_id()  # Thread-safe increment for span modification
                 elif outputs:
                     # Separate metadata from outputs
                     metadata = {}
@@ -272,6 +272,7 @@ class JudgevalCallbackHandler(BaseCallbackHandler):
 
                     # Set both fields on the span
                     trace_span.output = clean_outputs
+                    trace_span.increment_update_id()  # Thread-safe increment for span modification
                     if metadata:
                         # Merge with existing metadata
                         existing_metadata = trace_span.additional_metadata or {}
@@ -279,6 +280,7 @@ class JudgevalCallbackHandler(BaseCallbackHandler):
                             **existing_metadata,
                             **metadata,
                         }
+                        trace_span.increment_update_id()  # Thread-safe increment for span modification
 
                 # Queue span with completed state through background service
                 if trace_client.background_span_service:
@@ -308,20 +310,18 @@ class JudgevalCallbackHandler(BaseCallbackHandler):
                     complete_trace_data = {
                         "trace_id": self._trace_client.trace_id,
                         "name": self._trace_client.name,
-                        "created_at": datetime.utcfromtimestamp(
-                            self._trace_client.start_time
+                        "created_at": datetime.fromtimestamp(
+                            self._trace_client.start_time, timezone.utc
                         ).isoformat(),
                         "duration": self._trace_client.get_duration(),
                         "trace_spans": [
                             span.model_dump() for span in self._trace_client.trace_spans
                         ],
-                        "overwrite": self._trace_client.overwrite,
                         "offline_mode": self.tracer.offline_mode,
                         "parent_trace_id": self._trace_client.parent_trace_id,
                         "parent_name": self._trace_client.parent_name,
                     }
                     trace_id, trace_data = self._trace_client.save(
-                        overwrite=self._trace_client.overwrite,
                         final_save=True,  # Final save with usage counter updates
                     )
                     token = self.trace_id_to_token.pop(trace_id, None)
@@ -518,20 +518,18 @@ class JudgevalCallbackHandler(BaseCallbackHandler):
                 complete_trace_data = {
                     "trace_id": trace_client.trace_id,
                     "name": trace_client.name,
-                    "created_at": datetime.utcfromtimestamp(
-                        trace_client.start_time
+                    "created_at": datetime.fromtimestamp(
+                        trace_client.start_time, timezone.utc
                     ).isoformat(),
                     "duration": trace_client.get_duration(),
                     "trace_spans": [
                         span.model_dump() for span in trace_client.trace_spans
                     ],
-                    "overwrite": trace_client.overwrite,
                     "offline_mode": self.tracer.offline_mode,
                     "parent_trace_id": trace_client.parent_trace_id,
                     "parent_name": trace_client.parent_name,
                 }
                 trace_id_saved, trace_data = trace_client.save(
-                    overwrite=trace_client.overwrite,
                     final_save=True,
                 )
 
@@ -815,6 +813,7 @@ class JudgevalCallbackHandler(BaseCallbackHandler):
                 if span_id and span_id in trace_client.span_id_to_span:
                     trace_span = trace_client.span_id_to_span[span_id]
                     trace_span.usage = usage
+                    trace_span.increment_update_id()  # Thread-safe increment for span modification
 
         self._end_span_tracking(trace_client, run_id, outputs=outputs)
         # --- End Token Usage ---
