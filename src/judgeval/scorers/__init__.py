@@ -26,6 +26,7 @@ __all__ = [
     "FaithfulnessScorer",
     "AnswerRelevancyScorer",
     "AnswerCorrectnessScorer",
+    "SQLOptimizerScorer",
     "Text2SQLScorer",
     "InstructionAdherenceScorer",
     "DerailmentScorer",
